@@ -68,39 +68,49 @@ Weather = c("PRCP", "SNOW", "SNWD", "TMAX", "TMIN")
 library(shiny)
 
 # Define UI
-ui <- fluidPage(theme = shinytheme("lumen"),
+ui <- fluidPage(theme = shinytheme("cyborg"),
                 titlePanel("KC Weather"),
+                helpText("Last 50 years from KCI Airport"),
                 
                 
                 sidebarLayout(
                   sidebarPanel(
-                    
+                    helpText("TMAX = High Temp"),
+                    helpText("TMIN = Low Temp"),
+                    helpText("PRCP = Water equivalent precipitation"),
+                    helpText("SNOW = Snow accumilation"),
+                    helpText("SNWD = Snow Depth"),
                     # Select type of trend to plot
-                    selectInput(inputId = "Weather", label = strong("Weather Interest"),
+                    selectInput(inputId = "Weather", label = strong("Weather Interest:"),
                                 choices = unique(Weather),
                                 selected = "TMAX"),
+              
                     # Select date range to be plotted
-                    dateRangeInput("DATE", strong("Date range"), start = "1973-11-29", end = "2022-11-28",
+                    dateRangeInput("DATE", strong("Date range for Plots: (Min = 1973-11-29, Max = 2022-11-28)"), start = "2012-11-29", end = "2022-11-28",
                                    min = "1973-11-29", max = "2022-11-28"),
-                    br(),
+                    helpText("**Takes about 30 seconds if looking at 50yrs**"),
                     #Select Day and Month to calculate averages over last 50yrs weather wise
-                    numericInput("Month_avg", strong("Month for Average:"), 1, min = 1, max = 12),
-                    numericInput("Day_avg", strong("Day for Averageage:"), 1, min = 1, max = 31),
-                    
+                    numericInput("Month_avg", strong("Month for Averages: (Min = 1, Max = 12)"), 1, min = 1, max = 12),
+                    numericInput("Day_avg", strong("Day for Averages: (Min = 1, Max = 31)"), 1, min = 1, max = 31),
+                    numericInput("Year_avg", strong("Year for Averages: (Min = 1973, Max = 2021)"), 1973, min = 1973, max = 2021 ),
                   )
                 ,
                 # Output: Description, lineplot, and reference
                 mainPanel(
                   tabsetPanel(
-                    tabPanel("Basic Stats",
+                    tabPanel("Plots",
                   fluidRow(
-                  splitLayout(cellWidths = c("50%", "50%"), plotlyOutput(outputId = "Densityplot", height = "350px"),
+                  splitLayout(cellWidths = c("50%", "50%"), plotOutput(outputId = "Densityplot", height = "350px"),
                               plotOutput(outputId = "Dotplot", height = "350px"))
                   ),
                   fluidRow(
-                    plotlyOutput(outputId = "Scatterplot", height = "700px"))
-                    ),
-                  tabPanel("Averages", tableOutput("averages"))
+                    plotlyOutput(outputId = "Scatterplot", height = "650px"))
+                  ),
+                  tabPanel("Averages/Calculations", tableOutput("averages"),
+                           fluidRow(
+                             plotlyOutput(outputId = "Scatteryear", height = "650px"))
+                  
+                  )
                   )
                )
                 )
@@ -130,7 +140,7 @@ server <- function(input, output) {
       ggplotly(
         ggplot(selected_data(),aes_string(x= "DATE", y = input$Weather)) +
           geom_point()+
-          geom_smooth(method = loess, span =.1)
+          geom_smooth(method = loess)
       )
   })
   output$Dotplot <- renderPlot({
@@ -138,36 +148,252 @@ server <- function(input, output) {
     geom_dotplot(binwidth = .5, fill = "Sky Blue")
   })
   
-  output$Densityplot <- renderPlotly({
-    ggplotly(
+  output$Densityplot <- renderPlot({
       ggplot(selected_data(),aes_string(x = input$Weather)) +
-      geom_density(size = .1))
+      geom_density(linewidth = 1)
   })
+  
+  output$Scatteryear <- renderPlotly({
+    ggplotly(
+      weather_data %>% 
+        filter(year > 1972 & year < 2022) %>%
+        group_by(year) %>% 
+        summarise("Avg" = mean(get(input$Weather))) %>%
+      ggplot(aes_string(x= "year", y = "Avg")) +
+        geom_point()+
+       geom_smooth(method = loess)
+    )
+  })
+  
   
   output$averages <- renderTable({
-  PRCP_avg =  weather_data %>% 
+    
+  W_Type = c("50yr max",
+             "50yr min",
+            "50yr avg chosen day",
+            "50yr % over chosen day",
+            "Max over chosen day",
+            "Min over chosen day",
+             "Avg over chosen year", 
+             "% of days over chosen year",
+             "Max over chosen year",
+             "Min over chosen year")
+  
+  #Max
+  
+  PRCP_max =  weather_data %>% 
+    summarize('PRCP' = max(PRCP))
+  
+  SNOW_max =  weather_data %>% 
+    summarise('SNOW' = max(SNOW))
+  
+  SNWD_max =  weather_data %>% 
+    summarise('SNWD' = max(SNWD))
+  
+  TMAX_max =  weather_data %>% 
+    summarise('TMAX' = max(TMAX))
+  
+  TMIN_max =  weather_data %>% 
+    summarise('TMIN' = max(TMIN))
+  
+  #Min - don't need to do precipitations
+  
+  TMAX_min =  weather_data %>% 
+    summarise('TMAX' = min(TMAX))
+  
+  TMIN_min =  weather_data %>% 
+    summarise('TMIN' = min(TMIN))
+  
+  #50 yr avgs
+    
+  PRCP_avg_day =  weather_data %>% 
       filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
-    summarize('Avg_Preciptation' = mean(PRCP))
+    summarize('PRCP' = mean(PRCP))
   
-  
-  SNOW_avg =  weather_data %>% 
+  SNOW_avg_day =  weather_data %>% 
     filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
-    summarise('Avg_Snow' = mean(SNOW))
+    summarise('SNOW' = mean(SNOW))
   
-  SNWD_avg =  weather_data %>% 
+  SNWD_avg_day =  weather_data %>% 
     filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
-    summarise('Avg_Snow_Depth' = mean(SNWD))
+    summarise('SNWD' = mean(SNWD))
   
-  TMAX_avg =  weather_data %>% 
+  TMAX_avg_day =  weather_data %>% 
     filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
-    summarise('Avg_High_Temp' = mean(TMAX))
+    summarise('TMAX' = mean(TMAX))
   
-  TMIN_avg =  weather_data %>% 
+  TMIN_avg_day =  weather_data %>% 
     filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
-    summarise('Avg_Low_Temp' = mean(TMIN))
+    summarise('TMIN' = mean(TMIN))
   
-  avg_table = data.frame(PRCP_avg, SNOW_avg, SNWD_avg, TMAX_avg, TMIN_avg)
-  })
+  
+  #Percent of days - don't need to do temps
+  
+  PRCP_day_perc = weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('PRCP' = (sum(PRCP >0))/n()*100)
+  
+  
+  SNOW_day_perc = weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNOW' = (sum(SNOW >0))/n()*100)
+  
+  
+  SNWD_day_perc = weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNWD' = (sum(SNWD >0))/n()*100)
+  
+  #Max for given day
+  
+  PRCP_avg_max =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarize('PRCP' = max(PRCP))
+  
+  SNOW_avg_max =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNOW' = max(SNOW))
+  
+  SNWD_avg_max =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNWD' = max(SNWD))
+  
+  TMAX_avg_max =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('TMAX' = max(TMAX))
+  
+  TMIN_avg_max =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('TMIN' = max(TMIN))
+  
+  #Min for given day
+  
+  PRCP_avg_min =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarize('PRCP' = min(PRCP))
+  
+  SNOW_avg_min =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNOW' = min(SNOW))
+  
+  SNWD_avg_min =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('SNWD' = min(SNWD))
+  
+  TMAX_avg_min =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('TMAX' = min(TMAX))
+  
+  TMIN_avg_min =  weather_data %>% 
+    filter(month == as.numeric(input$Month_avg) & day == as.numeric(input$Day_avg)) %>% 
+    summarise('TMIN' = min(TMIN))
+  
+  #Avg over chosen year
+
+  PRCP_avg_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('PRCP' = mean(PRCP))
+  
+  SNOW_avg_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNOW' = mean(SNOW))
+  
+  SNWD_avg_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNWD' = mean(SNWD))
+  
+  TMAX_avg_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMAX' = mean(TMAX))
+  
+  TMIN_avg_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMIN' = mean(TMIN))
+  
+  #Percent of days - don't need to do temps
+  
+  PRCP_day = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('PRCP' = (sum(PRCP >0))/n()*100)
+  
+  
+  SNOW_day = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNOW' = (sum(SNOW >0))/n()*100)
+  
+  
+  SNWD_day = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNWD' = (sum(SNWD >0))/n()*100)
+  
+  #Max over chosen year
+  
+  PRCP_max_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('PRCP' = max(PRCP))
+  
+  SNOW_max_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNOW' = max(SNOW))
+  
+  SNWD_max_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('SNWD' = max(SNWD))
+  
+  TMAX_max_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMAX' = max(TMAX))
+  
+  TMIN_max_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMIN' = max(TMIN))
+  
+  #Min over chosen year - don't need to do precip
+
+  
+  TMAX_min_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMAX' = min(TMAX))
+  
+  TMIN_min_year = weather_data %>% 
+    filter(year == as.numeric(input$Year_avg)) %>% 
+    summarise('TMIN' = min(TMIN))
+  
+  
+  PRCP = rbind(PRCP_max, "0", round(PRCP_avg_day,2),
+               round(PRCP_day_perc,2),
+               round(PRCP_avg_max,2),
+               round(PRCP_avg_min,2),
+               round(PRCP_avg_year,2),
+               round(PRCP_day,2),
+               round(PRCP_max_year,2), "0")
+  SNOW = rbind(SNOW_max, "0", round(SNOW_avg_day,2),
+               round(SNOW_day_perc,2),
+               round(SNOW_avg_max,2),
+               round(SNOW_avg_min,2),
+               round(SNOW_avg_year,2),
+               round(SNOW_day,2),
+               round(SNOW_max_year,2), "0")
+  SNWD = rbind(SNWD_max, "0", round(SNWD_avg_day,2),
+               round(SNWD_day_perc,2),
+               round(SNWD_avg_max,2),
+               round(SNWD_avg_min,2),
+               round(SNWD_avg_year,2),
+               round(SNWD_day,2),
+               round(SNWD_max_year,2), "0")
+  TMAX = rbind(TMAX_max, TMAX_min, TMAX_avg_day,
+               "NA",
+               round(TMAX_avg_max,2),
+               round(TMAX_avg_min,2),
+               round(TMAX_avg_year,2), "NA", TMAX_max_year, TMAX_min_year)
+  TMIN = rbind(TMIN_max, TMIN_min, TMIN_avg_day, 
+               "NA",
+               round(TMIN_avg_max,2),
+               round(TMIN_avg_min,2),
+               round(TMIN_avg_year,2), "NA", TMIN_max_year, TMIN_min_year)
+averages = data.frame(PRCP, SNOW, SNWD, TMAX, TMIN, row.names = W_Type)
+ 
+  
+  }, rownames = TRUE)
 
 } 
 
