@@ -7,9 +7,12 @@
 #    http://shiny.rstudio.com/
 #
 
+library(lubridate)
+library(ggplot2)
 library(tidyverse)
 library(shinythemes)
 library(plotly)
+library(shiny)
 
 weather_data = read.csv("KCI_Weather.csv")
 #Check Data
@@ -65,7 +68,7 @@ Weather = c("PRCP", "SNOW", "SNWD", "TMAX", "TMIN")
 
 
 
-library(shiny)
+
 
 # Define UI
 ui <- fluidPage(theme = shinytheme("cyborg"),
